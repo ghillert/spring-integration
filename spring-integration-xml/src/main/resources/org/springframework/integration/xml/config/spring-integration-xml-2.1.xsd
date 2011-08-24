@@ -10,7 +10,7 @@
 	<xsd:import namespace="http://www.springframework.org/schema/beans" />
 	<xsd:import namespace="http://www.springframework.org/schema/tool" />
 	<xsd:import namespace="http://www.springframework.org/schema/integration"
-			schemaLocation="http://www.springframework.org/schema/integration/spring-integration-2.0.xsd"/>
+			schemaLocation="http://www.springframework.org/schema/integration/spring-integration-2.1.xsd"/>
 
 	<xsd:annotation>
 		<xsd:documentation>
@@ -344,31 +344,55 @@
 
 	<xsd:element name="xpath-router">
 		<xsd:complexType>
+        <xsd:complexContent>
+            <xsd:extension base="integration:channelResolvingRouterType">
 			<xsd:annotation>
 				<xsd:documentation>
-	Defines an XPath router.
+	                Defines an XPath router.
 				</xsd:documentation>
 			</xsd:annotation>
 			<xsd:sequence>
-				<xsd:element ref="xpath-expression" minOccurs="0" maxOccurs="1"/>
-				<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1"/>
-				<xsd:element name="mapping" minOccurs="0" maxOccurs="unbounded">
-					<xsd:complexType>
-						<xsd:attribute name="value" type="xsd:string" />
-						<xsd:attribute name="channel" type="xsd:string">
-							<xsd:annotation>
-								<xsd:appinfo>
-									<tool:annotation kind="ref">
-										<tool:expected-type
-											type="org.springframework.integration.core.MessageChannel" />
-									</tool:annotation>
-								</xsd:appinfo>
-							</xsd:annotation>
-						</xsd:attribute>
-					</xsd:complexType>
+				<xsd:element ref="xpath-expression" minOccurs="0" maxOccurs="1">
+                    <xsd:annotation>
+                        <xsd:documentation><![CDATA[
+                            Provide the XPath Expression e.g. '/order/type'. Either the 
+                            'xpath-expression' element or the 'xpath-expression-ref' 
+                            attribute must be set.
+                            
+                            Internally XPath expression will be evaluated as NODESET 
+                            type and converted to a List<String> representing 
+                            channel names.
+                            
+                            If the XPath Expression returns more then one value, 
+                            thus resulting in more then one channel name, the message 
+                            will be sent to all channels in the list.
+                        ]]></xsd:documentation>
+                    </xsd:annotation>				
+				</xsd:element>
+				<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1">
+	                <xsd:annotation>
+	                    <xsd:documentation>
+	                        Allows you to configure a Message Poller if this endpoint 
+	                        is a Polling Consumer.
+	                        </xsd:documentation>
+	                </xsd:annotation>   				
+				</xsd:element>
+				<xsd:element name="mapping" minOccurs="0" maxOccurs="unbounded" type="integration:mappingType">
+				    <xsd:annotation>
+			            <xsd:documentation><![CDATA[
+						    Defines mapping rules for this router 
+						    (e.g., mapping value='foo' channel='myChannel').
+			            ]]></xsd:documentation>
+			        </xsd:annotation>
 				</xsd:element>
 			</xsd:sequence>
-			<xsd:attribute name="id" type="xsd:string"/>
+			<xsd:attribute name="id" type="xsd:string">
+			    <xsd:annotation>
+                    <xsd:documentation><![CDATA[
+                        Identifies the underlying Spring bean definition (EventDrivenConsumer).
+                    ]]></xsd:documentation>
+                </xsd:annotation>
+			</xsd:attribute>
 			<xsd:attribute name="evaluate-as-string" type="xsd:boolean" default="false">
 				<xsd:annotation>
 					<xsd:documentation><![CDATA[
@@ -383,6 +407,9 @@
 			</xsd:attribute>
 			<xsd:attribute name="input-channel" type="xsd:string">
 				<xsd:annotation>
+				    <xsd:documentation>
+                        The receiving Message channel of this endpoint.
+                    </xsd:documentation>
 					<xsd:appinfo>
 						<tool:annotation kind="ref">
 							<tool:expected-type type="org.springframework.integration.core.MessageChannel"/>
@@ -392,6 +419,16 @@
 			</xsd:attribute>
 			<xsd:attribute name="xpath-expression-ref" type="xsd:string" use="optional">
 				<xsd:annotation>
+                    <xsd:documentation><![CDATA[
+                        XPath Routers allow the XPath to either be referenced at 
+                        the top level or configured via a nested <xpath-expression/> element.
+                        
+                        If declared at the top level, please provide the id of that 
+                        expression.
+                        
+                        Keep in mind that either the 'xpath-expression' element or 
+                        the 'xpath-expression-ref' attribute must be set.
+                    ]]></xsd:documentation>				
 					<xsd:appinfo>
 						<tool:annotation kind="ref">
 							<tool:expected-type type="org.springframework.xml.xpath.XPathExpression"/>
@@ -401,6 +438,12 @@
 			</xsd:attribute>
 			<xsd:attribute name="channel-resolver" type="xsd:string" use="optional">
 				<xsd:annotation>
+                    <xsd:documentation><![CDATA[
+                        Provides a reference to a ChannelResolver that resolves 
+                        the return value to the name of a MessageChannel within 
+                        the application context. If none is provided, the return 
+                        value is expected to match a channel name exactly.
+                    ]]></xsd:documentation>				
 					<xsd:appinfo>
 						<tool:annotation kind="ref">
 							<tool:expected-type type="org.springframework.integration.core.ChannelResolver"/>
@@ -408,30 +451,15 @@
 					</xsd:appinfo>
 				</xsd:annotation>
 			</xsd:attribute>
-			<xsd:attribute name="resolution-required" type="xsd:string">
-				<xsd:annotation>
-					<xsd:documentation>
-	Specify whether this router should always be required to return at least one channel or name.
-					</xsd:documentation>
-				</xsd:annotation>
-			</xsd:attribute>
 			<xsd:attribute name="ignore-channel-name-resolution-failures" type="xsd:string">
 				<xsd:annotation>
 					<xsd:documentation>
-	Specify whether a failure to resolve a channel name returned by this router should be ignored.
+	                    Specify whether a failure to resolve a channel name returned by this router should be ignored.
 					</xsd:documentation>
 				</xsd:annotation>
-			</xsd:attribute>
-			<xsd:attribute name="default-output-channel" type="xsd:string">
-				<xsd:annotation>
-					<xsd:appinfo>
-						<tool:annotation kind="ref">
-							<tool:expected-type
-								type="org.springframework.integration.core.MessageChannel" />
-						</tool:annotation>
-					</xsd:appinfo>
-				</xsd:annotation>
-			</xsd:attribute>
+			</xsd:attribute>	
+			</xsd:extension>
+			</xsd:complexContent>
 		</xsd:complexType>
 	</xsd:element>
 
@@ -529,7 +557,14 @@
 				</xsd:documentation>
 			</xsd:annotation>
 			<xsd:sequence>
-				<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1"/>
+				<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1">
+	                <xsd:annotation>
+	                    <xsd:documentation>
+	                        Allows you to configure a Message Poller if this endpoint 
+	                        is a Polling Consumer.
+	                        </xsd:documentation>
+	                </xsd:annotation>   				
+				</xsd:element>
 			</xsd:sequence>
 			<xsd:attribute name="id" type="xsd:string"/>
 			<xsd:attribute name="input-channel" type="xsd:string">
@@ -581,7 +616,14 @@
 
 	<xsd:complexType name="inputOutputEndpoint">
 		<xsd:sequence>
-			<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1"/>
+			<xsd:element ref="integration:poller" minOccurs="0" maxOccurs="1">
+                <xsd:annotation>
+                    <xsd:documentation>
+                        Allows you to configure a Message Poller if this endpoint 
+                        is a Polling Consumer.
+                        </xsd:documentation>
+                </xsd:annotation>			
+			</xsd:element>
 		</xsd:sequence>
 		<xsd:attribute name="id" type="xsd:string"/>
 		<xsd:attribute name="input-channel" type="xsd:string">

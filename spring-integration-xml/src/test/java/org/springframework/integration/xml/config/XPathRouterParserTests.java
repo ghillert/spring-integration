@@ -30,6 +30,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.integration.MessageChannel;
 import org.springframework.integration.channel.QueueChannel;
+import org.springframework.integration.core.MessagingTemplate;
 import org.springframework.integration.core.PollableChannel;
 import org.springframework.integration.endpoint.EventDrivenConsumer;
 import org.springframework.integration.message.GenericMessage;
@@ -255,7 +256,7 @@ public class XPathRouterParserTests {
 		inputChannel.send(docMessage);
 		assertNotNull(channelA.receive(10));
 		assertNotNull(channelA.receive(10));
-		assertNull(channelB.receive(10));
+		assertNull(channelB.receive(10));	
 		
 		EventDrivenConsumer routerEndpoint = ac.getBean("xpathRouterWithMappingMultiChannel", EventDrivenConsumer.class);
 		AbstractMessageRouter xpathRouter = (AbstractMessageRouter) TestUtils.getPropertyValue(routerEndpoint, "handler");
@@ -277,4 +278,45 @@ public class XPathRouterParserTests {
 		
 	}
 
+	@Test
+	public void testApplySequenceIsSet() throws Exception {
+		StringBuffer contextBuffer = new StringBuffer(
+				"<si-xml:xpath-router id='router' apply-sequence='true' input-channel='test-input'><si-xml:xpath-expression expression='/name'/></si-xml:xpath-router>");
+		EventDrivenConsumer consumer = buildContext(contextBuffer.toString());
+		
+		DirectFieldAccessor accessor = new DirectFieldAccessor(consumer);
+		Object handler = accessor.getPropertyValue("handler");
+		accessor = new DirectFieldAccessor(handler);
+		Object applySequence = accessor.getPropertyValue("applySequence");
+		assertEquals("applySequence not set to true ", true, applySequence);
+	}
+	
+	@Test
+	public void testDefaultOutputChannelIsSet() throws Exception {
+		StringBuffer contextBuffer = new StringBuffer(
+				"<si-xml:xpath-router id='router' default-output-channel='outputOne' input-channel='test-input'><si-xml:xpath-expression expression='/name'/></si-xml:xpath-router>");
+		EventDrivenConsumer consumer = buildContext(contextBuffer.toString());
+		
+		DirectFieldAccessor accessor = new DirectFieldAccessor(consumer);
+		Object handler = accessor.getPropertyValue("handler");
+		accessor = new DirectFieldAccessor(handler);
+		QueueChannel defaultOutputChannel = (QueueChannel) accessor.getPropertyValue("defaultOutputChannel");
+		assertEquals("Channel name is not 'outputOne' ", "outputOne", defaultOutputChannel.getComponentName());
+	}
+
+	@Test
+	public void testTimeOutIsSet() throws Exception {
+		StringBuffer contextBuffer = new StringBuffer(
+				"<si-xml:xpath-router id='router' timeout='100' input-channel='test-input'><si-xml:xpath-expression expression='/name'/></si-xml:xpath-router>");
+		EventDrivenConsumer consumer = buildContext(contextBuffer.toString());
+		
+		DirectFieldAccessor accessor = new DirectFieldAccessor(consumer);
+		Object handler = accessor.getPropertyValue("handler");
+		accessor = new DirectFieldAccessor(handler);
+		handler =  accessor.getPropertyValue("messagingTemplate");
+		accessor = new DirectFieldAccessor(handler);
+		Long timeout = (Long) accessor.getPropertyValue("sendTimeout");
+		assertEquals("Send Timeout is not 100 ", Long.valueOf(100), timeout);
+	}
+	
 }
