@@ -12,17 +12,16 @@
  */
 package org.springframework.integration.jdbc;
 
-import java.util.HashSet;
-import java.util.Set;
+import junit.framework.Assert;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.integration.MessageChannel;
 import org.springframework.integration.core.PollableChannel;
+import org.springframework.integration.jdbc.test.ServiceActivator;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
@@ -30,8 +29,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -50,12 +47,16 @@ public class TxTimeoutMessageStoreTests {
 	@Autowired
 	PlatformTransactionManager transactionManager;
 
+	@Autowired
+	ServiceActivator sa;
+
 	@Test
 	public void test() throws InterruptedException {
 
 		final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-		//transactionTemplate.setIsolationLevel(Isolation.READ_COMMITTED.value());
-		//transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
+		transactionTemplate.setIsolationLevel(Isolation.READ_COMMITTED.value());
+		transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
 
 		for (int i = 0; i < 10; ++i) {
 			final String message = "TEST MESSAGE " + i;
@@ -67,34 +68,14 @@ public class TxTimeoutMessageStoreTests {
 					inputChannel.send(MessageBuilder.withPayload(message).build());
 				}
 			});
+
+			log.error("Done sending message: "  + message);
 		}
 
 		log.error("Done sending");
 
-		if (errorChannel.receive(20000) != null) {
-			Assert.fail("Error message received.");
-		}
+		Assert.assertTrue("Contdown latch did not count down from 10 to 0 in 10000ms.", sa.await(30000));
 
 	}
 
-	@Transactional(readOnly = false, propagation = Propagation.MANDATORY)
-	public static class ServiceActivator {
-
-		private Set<String> seen = new HashSet<String>();
-
-		public ServiceActivator() {
-			super();
-		}
-
-		public void process(final String message) throws InterruptedException {
-			if (this.seen.contains(message)) {
-				log.error("Already seen: " + message);
-			} else {
-				this.seen.add(message);
-				log.info("Pre: " + message);
-				Thread.sleep(2000L);
-				log.info("Post: " + message);
-			}
-		}
-	}
 }

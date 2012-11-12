@@ -443,6 +443,11 @@ project('spring-integration-jdbc') {
 		testCompile "org.aspectj:aspectjweaver:$aspectjVersion"
 		testCompile "org.powermock:powermock-module-junit4:1.4.12"
 		testCompile "org.powermock:powermock-api-mockito:1.4.12"
+
+		testCompile "postgresql:postgresql:9.1-901-1.jdbc4"
+		testCompile "mysql:mysql-connector-java:5.1.21"
+		testCompile "commons-dbcp:commons-dbcp:1.4"
+
 	}
 	bundlor {
 		bundleSymbolicName = 'org.springframework.integration.jdbc'

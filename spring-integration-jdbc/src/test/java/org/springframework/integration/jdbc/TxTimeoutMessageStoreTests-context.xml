@@ -14,7 +14,7 @@
 		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
 
  	<jdbc:embedded-database id="dataSource" type="DERBY">
-		<jdbc:script location="classpath:org/springframework/integration/jdbc/schema-derby.sql" />
+		<jdbc:script location="classpath:org/springframework/integration/jdbc/messagestore/channel/schema-derby.sql" />
 	</jdbc:embedded-database>
 
 <!--
@@ -22,11 +22,16 @@
 	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource"
 		destroy-method="close">
 		<property name="driverClassName" value="org.postgresql.Driver" />
+		<property name="initialSize" value="10"/>
 		<property name="url"
 			value="jdbc:postgresql:integration" />
 		<property name="username" value="postgres" />
 		<property name="password" value="postgres" />
 	</bean>
+
+ 	<jdbc:embedded-database id="dataSource" type="DERBY">
+		<jdbc:script location="classpath:org/springframework/integration/jdbc/messagestore/channel/schema-derby.sql" />
+	</jdbc:embedded-database>
 
 	<jdbc:embedded-database id="dataSource" type="H2">
 		<jdbc:script location="classpath:org/springframework/integration/jdbc/schema-h2.sql" />
@@ -40,7 +45,8 @@
 		<property name="password" value="root" />
 		<property name="initialSize" value="10" />
 		<property name="defaultAutoCommit" value="false" />
-	</bean> -->
+	</bean>
+ -->
 
 	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
 		<property name="dataSource" ref="dataSource" />
@@ -50,29 +56,41 @@
 		-->
 	</bean>
 
-	<task:executor id="pool" pool-size="10" queue-capacity="4" rejection-policy="CALLER_RUNS" />
+	<int:transaction-synchronization-factory id="syncFactory">
+		<int:before-commit channel="loggit" />
+	</int:transaction-synchronization-factory>
+
+	<task:executor id="pool" pool-size="10" queue-capacity="10" rejection-policy="CALLER_RUNS" />
 
 	<int-jdbc:message-store id="store" data-source="dataSource" />
+
+	<bean id="store3" class="org.springframework.integration.jdbc.JdbcChannelMessageStore">
+		<property name="dataSource" ref="dataSource"/>
+		<property name="queryProvider">
+			<bean class="org.springframework.integration.jdbc.messagestore.channel.DerbyQueryProvider"/>
+		</property>
+		<property name="region" value="TX_TIMEOUT"/>
+	</bean>
 
 	<bean id="store1" class="org.springframework.integration.store.SimpleMessageStore" />
 
 	<int:channel id="inputChannel">
-		<int:queue message-store="store" />
+		<int:queue message-store="store3"/>
 	</int:channel>
 
 	<int:bridge input-channel="inputChannel" output-channel="outputChannel">
-		<int:poller fixed-delay="100" receive-timeout="500"
-			max-messages-per-poll="1" task-executor="pool">
-			<int:transactional propagation="REQUIRED"
-				isolation="DEFAULT" timeout="10" transaction-manager="transactionManager" />
+		<int:poller fixed-delay="500" receive-timeout="500"
+			max-messages-per-poll="10" task-executor="pool">
+			<int:transactional propagation="SUPPORTS" synchronization-factory="syncFactory"
+				isolation="READ_UNCOMMITTED" transaction-manager="transactionManager" />
 		</int:poller>
 	</int:bridge>
 
 	<int:channel id="outputChannel" />
 
-	<int:service-activator input-channel="outputChannel">
-		<bean class="org.springframework.integration.jdbc.TxTimeoutMessageStoreTests$ServiceActivator" />
-	</int:service-activator>
+	<bean id="sa" class="org.springframework.integration.jdbc.test.ServiceActivator"/>
+
+	<int:service-activator input-channel="outputChannel" ref="sa"/>
 
 	<int:channel id="errorChannel">
 		<int:queue/>
