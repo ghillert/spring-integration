@@ -127,6 +127,48 @@ public class SearchReceivingMessageSourceWithRedisTests extends RedisAvailableTe
 		redisTemplate.delete(metadataKey);
 	}
 
+	@Test
+	@RedisAvailable
+	public void testPollForTweetsThreeResultsAndResetWithRedisMetadataStore() throws Exception {
+
+		final MetadataStore metadataStore = TestUtils.getPropertyValue(twitterSearchAdapter, "source.metadataStore", MetadataStore.class);
+		assertTrue("Exptected metadataStore to be an instance of RedisMetadataStore", metadataStore instanceof RedisMetadataStore);
+
+		final SearchReceivingMessageSource source = TestUtils.getPropertyValue(twitterSearchAdapter, "source", SearchReceivingMessageSource.class);
+		source.setMinimumWaitBetweenPolls(0);
+		source.resetMetadataStore();
+
+		final Message<?> message1 = source.receive();
+		final Message<?> message2 = source.receive();
+		final Message<?> message3 = source.receive();
+
+		/* We received 3 messages so far. When invoking receive() again the search
+		 * will return again the 3 test Tweets but as we already processed them
+		 * no message (null) is returned. */
+		final Message<?> message4 = source.receive();
+
+		source.resetMetadataStore();
+
+		/* After the reset of the metadataStore we will get the 3 tweets again. */
+		final Message<?> message5 = source.receive();
+		final Message<?> message6 = source.receive();
+		final Message<?> message7 = source.receive();
+
+		assertNotNull(message1);
+		assertNotNull(message2);
+		assertNotNull(message3);
+
+		assertNull(message4);
+
+		assertNotNull(message5);
+		assertNotNull(message6);
+		assertNotNull(message7);
+
+		assertEquals(3L, source.getLastProcessedId());
+
+		source.resetMetadataStore();
+	}
+
 	@Configuration
 	@ImportResource("classpath:org/springframework/integration/twitter/inbound/SearchReceivingMessageSourceWithRedisTests-context.xml")
 	static class SearchReceivingMessageSourceWithRedisTestsConfig {

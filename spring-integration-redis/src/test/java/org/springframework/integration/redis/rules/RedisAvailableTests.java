@@ -40,7 +40,7 @@ public class RedisAvailableTests {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public JedisConnectionFactory getConnectionFactoryForTest(){
 		JedisConnectionFactory jcf = new JedisConnectionFactory();
-		jcf.setPort(7379);
+		jcf.setPort(RedisAvailableRule.REDIS_PORT);
 		jcf.afterPropertiesSet();
 		RedisTemplate rt = new RedisTemplate<UUID, Object>();
 		rt.setConnectionFactory(jcf);

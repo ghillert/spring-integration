@@ -21,20 +21,27 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Properties;
 
 import org.junit.Ignore;
 import org.junit.Test;
-
 import org.springframework.beans.factory.config.PropertiesFactoryBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ImportResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.integration.Message;
+import org.springframework.integration.redis.rules.RedisAvailable;
+import org.springframework.integration.redis.store.metadata.RedisMetadataStore;
+import org.springframework.integration.store.metadata.MetadataStore;
 import org.springframework.integration.store.metadata.SimpleMetadataStore;
 import org.springframework.integration.test.util.TestUtils;
 import org.springframework.social.twitter.api.SearchMetadata;
@@ -143,27 +150,7 @@ public class SearchReceivingMessageSourceTests {
 	@Test
 	public void testPollForTweetsThreeResults() {
 
-		final TwitterTemplate twitterTemplate;
-
-		final SearchOperations so = mock(SearchOperations.class);
-
-		final Tweet tweet1 = new Tweet(1L, "first", new Date(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
-		final Tweet tweet2 = new Tweet(2L, "first", new Date(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
-		final Tweet tweet3 = new Tweet(3L, "first", new Date(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
-
-		final List<Tweet> tweets = new ArrayList<Tweet>();
-
-		tweets.add(tweet1);
-		tweets.add(tweet2);
-		tweets.add(tweet3);
-
-		final SearchResults results = new SearchResults(tweets, new SearchMetadata(111, 111));
-
-		twitterTemplate = mock(TwitterTemplate.class);
-
-		when(twitterTemplate.searchOperations()).thenReturn(so);
-		SearchParameters params = new SearchParameters(SEARCH_QUERY).count(20).sinceId(0);
-		when(twitterTemplate.searchOperations().search(params)).thenReturn(results);
+		final TwitterTemplate twitterTemplate = getMockedTwitterTemplate();
 
 		final SearchReceivingMessageSource messageSource = new SearchReceivingMessageSource(twitterTemplate);
 
@@ -173,6 +160,71 @@ public class SearchReceivingMessageSourceTests {
 
 		assertNotNull(tweetSearchResults);
 		assertEquals(3, tweetSearchResults.size());
+	}
+
+	@Test
+	public void testPollForTweetsThreeResultsAndResetMetadataStore() throws Exception {
+
+		final TwitterTemplate twitterTemplate = getMockedTwitterTemplate();
+		final SearchReceivingMessageSource source = new SearchReceivingMessageSource(twitterTemplate);
+		source.setMinimumWaitBetweenPolls(0);
+		source.afterPropertiesSet();
+
+		final MetadataStore metadataStore = TestUtils.getPropertyValue(source, "metadataStore", MetadataStore.class);
+		assertTrue("Exptected metadataStore to be an instance of SimpleMetadataStore", metadataStore instanceof SimpleMetadataStore);
+
+		final Message<?> message1 = source.receive();
+		final Message<?> message2 = source.receive();
+		final Message<?> message3 = source.receive();
+
+		/* We received 3 messages so far. When invoking receive() again the search
+		 * will return again the 3 test Tweets but as we already processed them
+		 * no message (null) is returned. */
+		final Message<?> message4 = source.receive();
+
+		source.resetMetadataStore();
+
+		/* After the reset of the metadataStore we will get the 3 tweets again. */
+		final Message<?> message5 = source.receive();
+		final Message<?> message6 = source.receive();
+		final Message<?> message7 = source.receive();
+
+		assertNotNull(message1);
+		assertNotNull(message2);
+		assertNotNull(message3);
+
+		assertNull(message4);
+
+		assertNotNull(message5);
+		assertNotNull(message6);
+		assertNotNull(message7);
+
+		assertEquals(3L, source.getLastProcessedId());
+
+		source.resetMetadataStore();
+	}
+
+	private TwitterTemplate getMockedTwitterTemplate() {
+		final TwitterTemplate twitterTemplate = mock(TwitterTemplate.class);
+
+		final SearchOperations so = mock(SearchOperations.class);
+
+		final Tweet tweet3 = new Tweet(3L, "first", new GregorianCalendar(2013, 2, 20).getTime(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
+		final Tweet tweet1 = new Tweet(1L, "first", new GregorianCalendar(2013, 0, 20).getTime(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
+		final Tweet tweet2 = new Tweet(2L, "first", new GregorianCalendar(2013, 1, 20).getTime(), "fromUser", "profileImageUrl", 888L, 999L, "languageCode", "source");
+
+		final List<Tweet> tweets = new ArrayList<Tweet>();
+
+		tweets.add(tweet3);
+		tweets.add(tweet1);
+		tweets.add(tweet2);
+
+		final SearchResults results = new SearchResults(tweets, new SearchMetadata(111, 111));
+
+		when(twitterTemplate.searchOperations()).thenReturn(so);
+		when(twitterTemplate.searchOperations().search(any(SearchParameters.class))).thenReturn(results);
+
+		return twitterTemplate;
 	}
 
 }

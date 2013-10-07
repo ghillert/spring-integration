@@ -31,6 +31,7 @@ import org.springframework.integration.core.MessageSource;
 import org.springframework.integration.store.metadata.MetadataStore;
 import org.springframework.integration.store.metadata.SimpleMetadataStore;
 import org.springframework.integration.support.MessageBuilder;
+import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.social.twitter.api.DirectMessage;
 import org.springframework.social.twitter.api.Tweet;
 import org.springframework.social.twitter.api.Twitter;
@@ -38,6 +39,8 @@ import org.springframework.social.twitter.api.UserOperations;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+
+import org.springframework.jmx.export.annotation.ManagedAttribute;;
 
 /**
  * Abstract class that defines common operations for receiving various types of
@@ -66,9 +69,11 @@ abstract class AbstractTwitterMessageSource<T> extends IntegrationObjectSupport 
 
 	private volatile int prefetchThreshold = 0;
 
-	private volatile long lastEnqueuedId = -1;
+	private volatile long lastEnqueuedId = -1L;
 
-	private volatile long lastProcessedId = -1;
+	private volatile long lastProcessedId = -1L;
+
+	private volatile long minimumWaitBetweenPolls = 15000;
 
 	private final Twitter twitter;
 
@@ -82,6 +87,18 @@ abstract class AbstractTwitterMessageSource<T> extends IntegrationObjectSupport 
 		this.twitter = twitter;
 	}
 
+	/**
+	 * If not set this value defaults to 15000 ms. Please also consult the Twitter
+	 * API on rate limiting at:
+	 *
+	 * https://dev.twitter.com/docs/rate-limiting/1.1
+	 *
+	 * @param minimumWaitBetweenPolls Must be >= 0
+	 */
+	public void setMinimumWaitBetweenPolls(long minimumWaitBetweenPolls) {
+		Assert.isTrue(minimumWaitBetweenPolls >= 0L, "'minimumWaitBetweenPolls' must not be negative.");
+		this.minimumWaitBetweenPolls = minimumWaitBetweenPolls;
+	}
 
 	protected Twitter getTwitter() {
 		return this.twitter;
@@ -124,8 +141,12 @@ abstract class AbstractTwitterMessageSource<T> extends IntegrationObjectSupport 
 		// initialize the last status ID from the metadataStore
 		if (StringUtils.hasText(lastId)) {
 			this.lastProcessedId = Long.parseLong(lastId);
-		    this.lastEnqueuedId = this.lastProcessedId;
 		}
+		else {
+			this.lastProcessedId = -1L;
+		}
+
+		this.lastEnqueuedId = this.lastProcessedId;
 
 	}
 
@@ -134,7 +155,7 @@ abstract class AbstractTwitterMessageSource<T> extends IntegrationObjectSupport 
 		if (tweet == null) {
 			long currentTime = System.currentTimeMillis();
 			long elapsedTime = currentTime - this.lastPollForTweet;
-			if (elapsedTime < 15000) {
+			if (elapsedTime < this.minimumWaitBetweenPolls) {
 				// need to wait longer
 				return null;
 			}
@@ -230,6 +251,27 @@ abstract class AbstractTwitterMessageSource<T> extends IntegrationObjectSupport 
 				throw new IllegalArgumentException("Uncomparable Twitter objects: " + tweet1 + " and " + tweet2);
 			}
 		}
+	}
+
+	/**
+	 * Remove the metadata key and the corresponding value from the Metadata Store.
+	 */
+	@ManagedOperation(description="Remove the metadata key and the corresponding value from the Metadata Store.")
+	void resetMetadataStore() {
+		synchronized(this) {
+			this.metadataStore.put(metadataKey, "-1");
+			this.lastProcessedId = -1L;
+			this.lastEnqueuedId = -1L;
+		}
+	}
+
+	/**
+	 *
+	 * @return {@code -1} if lastProcessedId is not set, yet.
+	 */
+	@ManagedAttribute
+	public long getLastProcessedId() {
+		return lastProcessedId;
 	}
 
 }
